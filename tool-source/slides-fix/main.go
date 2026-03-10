@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -15,7 +16,32 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const defaultModel = "gemini-3.1-flash-image-preview"
+const defaultModel = "gemini-3-pro-image-preview"
+
+// loadModelFromConfig 从可执行文件同目录的 model.conf 读取模型名。
+// 格式：# 开头为注释，第一个非注释非空行为生效模型。
+func loadModelFromConfig() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	confPath := filepath.Join(filepath.Dir(exe), "model.conf")
+	f, err := os.Open(confPath)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		return line
+	}
+	return ""
+}
 
 type Task struct {
 	Image  string `json:"image"`
@@ -28,11 +54,21 @@ func main() {
 	prompt := flag.String("prompt", "", "提示词文本（单张模式）")
 	output := flag.String("output", "", "输出图片路径（单张模式，留空自动生成）")
 	batchFile := flag.String("batch", "", "批量任务 JSON 文件路径")
-	model := flag.String("model", defaultModel, "Gemini 模型名称")
+	model := flag.String("model", "", "Gemini 模型名称（留空则读取 model.conf）")
 	envFile := flag.String("env", ".env", ".env 文件路径")
 	delay := flag.Int("delay", 10, "批量请求间隔秒数")
 	concurrency := flag.Int("concurrency", 1, "批量并发数（同时处理的任务数）")
+	timeout := flag.Int("timeout", 180, "HTTP 请求超时秒数（图片生成建议 ≥120）")
 	flag.Parse()
+
+	// 模型优先级：-model 参数 > model.conf > 内置默认值
+	if *model == "" {
+		if confModel := loadModelFromConfig(); confModel != "" {
+			*model = confModel
+		} else {
+			*model = defaultModel
+		}
+	}
 
 	if _, err := os.Stat(*envFile); os.IsNotExist(err) {
 		fmt.Printf("错误：当前目录下未找到 %s 文件。\n", *envFile)
@@ -56,15 +92,17 @@ func main() {
 
 	ctx := context.Background()
 
+	httpTimeout := time.Duration(*timeout) * time.Second
+
 	if *batchFile != "" {
-		runBatch(ctx, apiKey, *batchFile, *model, *delay, *concurrency)
+		runBatch(ctx, apiKey, *batchFile, *model, *delay, *concurrency, httpTimeout)
 	} else if *imagePath != "" && *prompt != "" {
 		outPath := *output
 		if outPath == "" {
 			base := strings.TrimSuffix(filepath.Base(*imagePath), filepath.Ext(*imagePath))
 			outPath = base + "_fixed.png"
 		}
-		runSingle(ctx, apiKey, *imagePath, *prompt, outPath, *model)
+		runSingle(ctx, apiKey, *imagePath, *prompt, outPath, *model, httpTimeout)
 	} else {
 		fmt.Println("用法：")
 		fmt.Println("  单张模式：slides-fix -image <路径> -prompt <提示词> [-output <输出路径>]")
@@ -75,7 +113,7 @@ func main() {
 	}
 }
 
-func runSingle(ctx context.Context, apiKey, imagePath, prompt, output, model string) {
+func runSingle(ctx context.Context, apiKey, imagePath, prompt, output, model string, httpTimeout time.Duration) {
 	fmt.Printf("处理中：%s\n", imagePath)
 	fmt.Printf("  模型：%s\n", model)
 	promptRunes := []rune(prompt)
@@ -84,7 +122,7 @@ func runSingle(ctx context.Context, apiKey, imagePath, prompt, output, model str
 	}
 	fmt.Printf("  提示词：%s...\n", string(promptRunes))
 
-	gc, err := NewGeminiClient(ctx, apiKey, model)
+	gc, err := NewGeminiClient(ctx, apiKey, model, httpTimeout)
 	if err != nil {
 		fmt.Printf("  失败：%v\n", err)
 		os.Exit(1)
@@ -108,7 +146,7 @@ type indexedTask struct {
 	task  Task
 }
 
-func runBatch(ctx context.Context, apiKey, batchFile, model string, delay, concurrency int) {
+func runBatch(ctx context.Context, apiKey, batchFile, model string, delay, concurrency int, httpTimeout time.Duration) {
 	raw, err := os.ReadFile(batchFile)
 	if err != nil {
 		fmt.Printf("错误：读取 %s 失败: %v\n", batchFile, err)
@@ -136,10 +174,10 @@ func runBatch(ctx context.Context, apiKey, batchFile, model string, delay, concu
 		concurrency = len(tasks)
 	}
 
-	fmt.Printf("批量任务：共 %d 项，模型=%s，间隔=%d秒，并发=%d\n\n", len(tasks), model, delay, concurrency)
+	fmt.Printf("批量任务：共 %d 项，模型=%s，间隔=%d秒，并发=%d，超时=%v\n\n", len(tasks), model, delay, concurrency, httpTimeout)
 
 	// 创建共享客户端（复用连接）
-	gc, err := NewGeminiClient(ctx, apiKey, model)
+	gc, err := NewGeminiClient(ctx, apiKey, model, httpTimeout)
 	if err != nil {
 		fmt.Printf("错误：%v\n", err)
 		os.Exit(1)

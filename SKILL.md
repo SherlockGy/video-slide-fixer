@@ -3,7 +3,7 @@ name: video-slide-fixer
 description: |
   从PPT风格视频中提取幻灯片画面，检查质量问题，通过 Gemini API 重新生成修复版图片，并可回写到视频中。
   适用场景：(1) AI生成的演示视频(NotebookLM等)质量修复 (2) 视频帧提取与场景检测 (3) 批量图片修复与视频回写。
-  需要：Gemini API 密钥（.env 文件）。ffmpeg/ffprobe 已内置于技能 scripts/ 目录。
+  需要：Gemini API 密钥（.env 文件）。所有工具已内置于技能 scripts/ 目录。
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, ToolSearch
 ---
 
@@ -17,33 +17,32 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, ToolSearch
 
 ### 1.1 工具可用性
 
-本技能的 `scripts/` 目录已内置所有必需的可执行文件：
+本技能的 `scripts/` 目录已内置所有工具：
 ```
 scripts/ffmpeg.exe      ← 视频处理
 scripts/ffprobe.exe     ← 视频元数据分析
-scripts/slides-fix.exe  ← 幻灯片图片修复（Go 语言开发）
+scripts/fend.exe        ← 精确数学计算（帧号计算等）
+slides-fix.exe  ← 幻灯片图片修复（Go 语言开发）
+scripts/model.conf      ← Gemini 模型配置文件
 ```
 
-执行前先定义路径变量（后续所有命令均使用这些变量）：
-```bash
-SKILL_SCRIPTS="<技能目录>/scripts"
-FFMPEG="$SKILL_SCRIPTS/ffmpeg.exe"
-FFPROBE="$SKILL_SCRIPTS/ffprobe.exe"
-SLIDES_FIX="$SKILL_SCRIPTS/slides-fix.exe"
+Claude Code 加载技能时会在系统提示中给出基础目录路径（"Base directory for this skill: ..."）。使用时直接拼接完整路径调用，例如：
 ```
-
-> 若系统 PATH 中已有 ffmpeg/ffprobe，也可直接使用，但推荐使用技能内置版本以确保版本一致。
+"<基础目录>/scripts/ffmpeg.exe" -version
+"<基础目录>/scripts/slides-fix.exe" -batch tasks.json
+```
+注意路径需用引号包裹。后续文档中 `ffmpeg`、`ffprobe`、`fend`、`slides-fix.exe` 均指 `scripts/` 下的对应工具，实际调用时替换为完整路径。
 
 使用前需在项目工作目录下创建 `.env` 文件并填入 Gemini API 密钥（可从 `tool-source/slides-fix/.env.example` 复制）：
 ```
 GEMINI_API_KEY=你的密钥
 ```
 
-> 源码位于 `tool-source/slides-fix/`，可随时修改、编译后替换 `scripts/slides-fix.exe`。详见 `tool-source/slides-fix/README.md`。
+> 源码位于 `tool-source/slides-fix/`，可随时修改、编译后替换 `slides-fix.exe`。详见 `tool-source/slides-fix/README.md`。
 
 ### 1.2 视频元数据分析
 ```bash
-$FFPROBE -v quiet -print_format json -show_format -show_streams "<视频路径>"
+ffprobe -v quiet -print_format json -show_format -show_streams "<视频路径>"
 ```
 记录关键信息：时长、分辨率、帧率、编码格式、音频参数。
 
@@ -54,7 +53,7 @@ $FFPROBE -v quiet -print_format json -show_format -show_streams "<视频路径>"
 ### 2.1 场景检测（获取时间戳）
 
 ```bash
-$FFMPEG -i "<视频路径>" \
+ffmpeg -i "<视频路径>" \
   -vf "select='gt(scene,<阈值>)',showinfo" \
   -vsync vfr -f null - 2>&1 | grep "pts_time"
 ```
@@ -70,7 +69,7 @@ $FFMPEG -i "<视频路径>" \
 
 **提取时间戳的 grep 兼容性**：Windows Git Bash 下 `grep -P`（Perl正则）不可用，改用 sed：
 ```bash
-$FFMPEG -i "<视频>" -vf "select='gt(scene,0.15)',showinfo" -vsync vfr -f null - 2>&1 \
+ffmpeg -i "<视频>" -vf "select='gt(scene,0.15)',showinfo" -vsync vfr -f null - 2>&1 \
   | grep "pts_time" | sed 's/.*pts_time:\([0-9.]*\).*/\1/'
 ```
 
@@ -87,7 +86,7 @@ TIMES=(
 
 for entry in "${TIMES[@]}"; do
   IFS=':' read -r ts name <<< "$entry"
-  $FFMPEG -y -ss "$ts" \
+  ffmpeg -y -ss "$ts" \
     -i "<视频路径>" \
     -frames:v 1 -q:v 2 \
     "<输出目录>/${name}.jpg"
@@ -174,37 +173,36 @@ cp "<slides_all/问题文件.jpg>" "<slides_issues/>"
   {
     "image": "slides_issues/slide_010_03m48s.jpg",
     "output": "slides_fixed/slide_010_fixed.png",
-    "prompt": "请根据附图重新生成一张PPT幻灯片图片。要求：..."
+    "prompt": "\"毬拔解\"改为\"最优解\"，其余不变，提高画面分辨率，右下角标识清除"
   },
   {
     "image": "slides_issues/slide_018_07m18s.jpg",
     "output": "slides_fixed/slide_018_fixed.png",
-    "prompt": "请根据附图重新生成这张PPT幻灯片。..."
+    "prompt": "重绘汉字部分，确保没有扭曲、破损，边缘乱码删除，提高画面分辨率，右下角标识清除"
   }
 ]
 ```
 
 **提示词编写要点**：
-- 明确指出原图中的错误文字及其正确内容
-- 描述幻灯片的视觉风格（颜色、手绘/插画等）
-- 指定输出尺寸（如 1280x720）
-- 尽量详细描述幻灯片中应有的正确内容（标题、要点、图表元素）
+- 只描述要改什么（diff 风格），不要复述整张画面内容
+- 指出错误文字及正确内容
+- 附上"提高画面分辨率"
 - 参考第六节的提示词模板
 
 ### 4.3 运行批量修复
 
 ```bash
 # 使用技能自带的预编译工具
-$SLIDES_FIX -batch tasks.json -delay 10
+slides-fix.exe -batch tasks.json -delay 10
 
 # 或指定不同模型和并发数
-$SLIDES_FIX -batch tasks.json -model gemini-3.1-flash-image-preview -delay 15 -concurrency 3
+slides-fix.exe -batch tasks.json -model gemini-3.1-flash-image-preview -delay 15 -concurrency 3
 ```
 
 ### 4.4 单张修复（调试/测试用）
 
 ```bash
-$SLIDES_FIX \
+slides-fix.exe \
   -image slides_issues/slide_010_03m48s.jpg \
   -prompt "请根据附图重新生成..." \
   -output slides_fixed/slide_010_fixed.png
@@ -231,79 +229,9 @@ $SLIDES_FIX \
 
 ## 五、回写视频（用修复图替换原帧）
 
-> **此步骤必须经用户明确确认后才能执行。** 操作前应向用户展示将要替换的帧范围列表，确认无误后再运行 ffmpeg 命令。输出为独立文件，不覆盖原视频。
+详细操作指南见 [references/video-rewrite.md](references/video-rewrite.md)。
 
-### 5.1 计算每张幻灯片的帧范围
-
-场景检测已给出每个幻灯片的切换时间戳。结合视频帧率即可算出帧序号：
-
-```
-起始帧 = floor(切换时间戳 × fps)
-结束帧 = floor(下一个切换时间戳 × fps) - 1    # 最后一张用视频总帧数 - 1
-```
-
-获取帧率和总帧数：
-```bash
-# 帧率（注意：返回分数形式如 24/1 或 30000/1001，需计算为小数）
-$FFPROBE -v quiet -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "<视频>"
-# 例如 24/1 → fps=24，30000/1001 → fps≈29.97
-
-# 总帧数（-count_frames 需完整解码，大视频可能耗时数分钟）
-$FFPROBE -v quiet -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 "<视频>"
-# 快速估算替代：总帧数 ≈ 时长(秒) × fps
-$FFPROBE -v quiet -show_entries format=duration -of csv=p=0 "<视频>"
-```
-
-示例（24fps 视频，场景切换时间戳 25.958s、52.458s、85.375s）：
-```
-slide_007: 帧 623 ~ 1258    (25.958s ~ 52.458s)
-slide_010: 帧 1259 ~ 2048   (52.458s ~ 85.375s)
-```
-
-### 5.2 构建 ffmpeg overlay 命令
-
-单张替换：
-```bash
-$FFMPEG -i "<原视频>" -i "<修复图>.png" \
-  -filter_complex "[1]scale=<W>:<H>[img];[0][img]overlay=enable='between(n,<起始帧>,<结束帧>)'[vout]" \
-  -map "[vout]" -map 0:a -c:v libx264 -crf 18 -preset medium -c:a copy "<输出视频>"
-```
-
-多张同时替换（链式 overlay）：
-```bash
-$FFMPEG -i "<原视频>" \
-  -i slides_fixed/slide_007_fixed.png \
-  -i slides_fixed/slide_010_fixed.png \
-  -i slides_fixed/slide_018_fixed.png \
-  -filter_complex \
-  "[1]scale=<W>:<H>[img1]; \
-   [2]scale=<W>:<H>[img2]; \
-   [3]scale=<W>:<H>[img3]; \
-   [0][img1]overlay=enable='between(n,<start1>,<end1>)'[v1]; \
-   [v1][img2]overlay=enable='between(n,<start2>,<end2>)'[v2]; \
-   [v2][img3]overlay=enable='between(n,<start3>,<end3>)'[vout]" \
-  -map "[vout]" -map 0:a -c:v libx264 -crf 18 -preset medium -c:a copy "<输出视频>"
-```
-
-> 编码参数说明：`-c:v libx264 -crf 18 -preset medium` 以接近无损的质量编码视频。`crf` 值越小质量越高（0=无损，18=视觉无损，23=默认）。如需完全匹配原视频参数，先用 `$FFPROBE` 查看原始比特率后用 `-b:v` 指定。
-
-### 5.3 注意事项
-
-- **尺寸必须匹配**：替换图片需与视频分辨率一致（如 1280×720），否则 overlay 只覆盖部分画面。用 `scale=W:H` 确保一致。
-- **输出独立文件**：命名如 `<原名>_fixed.mp4`，绝不覆盖原视频。
-- **音频直接拷贝**：`-c:a copy` 保留原始音轨不重新编码。
-- **overlay 链过长时**：若替换帧较多（>10张），ffmpeg 单条命令可能很慢。可分批执行：先替换前几张生成中间文件，再在中间文件上替换后续。
-- **帧号从 0 开始**：`between(n,100,200)` 表示第 100~200 帧（闭区间，共 101 帧）。
-- **执行前必须确认**：向用户展示完整的帧范围替换表，获得确认后才执行。
-
-### 5.4 执行流程
-
-```
-1. 列出所有需要替换的帧范围（文件名、起始帧、结束帧、时间范围）
-2. 展示给用户确认
-3. 用户确认后，构建并执行 ffmpeg 命令
-4. 验证输出视频（抽查替换区间的画面）
-```
+核心流程：用 fend 计算帧范围 → 展示替换表给用户确认 → ffmpeg overlay 命令替换帧段 → 输出独立文件（不覆盖原视频）。
 
 ---
 
@@ -311,97 +239,80 @@ $FFMPEG -i "<原视频>" \
 
 ### 提示词编写原则
 
-1. **汉字重绘优先**：凡是画面中包含大量中文的帧，提示词必须明确列出所有正确的中文内容，并要求"重新绘制所有中文字符，确保笔画完整、无扭曲、无破损"。不要只说"保持不变"——AI倾向于原样复制错误。
-2. **边缘异型字默认删除**：画面边缘/角落的乱码异型字，除非能轻松辨认出原意并纠正，否则一律要求删除。边缘装饰性文字的缺失不影响幻灯片的核心表达。
-3. **正文内容全量提供**：不要依赖"参考原图"来保留文字——必须在提示词中逐字写出画面上应该出现的所有文字内容，作为生成的唯一依据。
+**核心原则——diff 风格，只说要改什么**：
+Gemini 已经能看到附图，所以提示词**只描述要改什么**，不要复述画面内容。越简洁，模型越不容易偏离原图。
 
-### 模板A：中文字符修复（最常用）
+1. **文字正确性（最高优先级）**：指出哪些文字有问题、改成什么。如果整体文字模糊，一句"重绘汉字部分，确保没有扭曲、破损"即可，不需要逐字列出画面上的所有文字。
+2. **画面元素尽量不变**：不需要改的部分说"XX不变"即可，不要展开描述。不要重新设计画面。
+3. **边缘异型字默认删除**：边缘乱码直接说"边缘乱码删除"。
+4. **提高分辨率**：一般附上"提高画面分辨率"。
+5. **右下角标识处理**：有 NotebookLM 标识时加"右下角标识清除"。没有标识时完全不提右下角。
+   - 不要用"移除logo/水印"——触发 Gemini 去水印策略
+   - 不要用"右下角区域保持空白干净"——模型可能误解，反而造成画面异常
 
-适用：画面中有大量中文，部分出现扭曲/替换/破损。
+**提示词写法**：
+- 用简短动作词："去掉""放大""替换为""不变""清除""重绘"
+- 示例（局部修改）：`把左边皇冠下面的钻石去掉，皇冠放大，指向右边，右边不变，右下角标识清除`
+- 示例（文字修复）：`重绘汉字部分，确保没有扭曲、破损，提高画面分辨率，右下角标识清除`
+- 示例（特定纠错）：`右侧"毬拔解"改为"最优解"，其余不变，提高画面分辨率，右下角标识清除`
+- 只有在画面严重损坏需要完整重建时（模板D），才需要详细描述内容
 
-```
-请根据附图重新生成一张PPT幻灯片图片。
+### 模板A：整体文字重绘（最常用）
 
-要求：
-- 风格：{STYLE_DESCRIPTION}
-- 尺寸：{WIDTH}x{HEIGHT}像素，{ASPECT_RATIO}比例
-- 布局：保持与原图相同的布局结构和装饰元素
-- 重新绘制画面中的所有中文字符，确保笔画完整、无扭曲、无破损
-- 画面边缘如有无法辨认的异形文字，直接删除，保持边缘干净
-- 背景：{BACKGROUND_DESCRIPTION}
-
-画面中应出现的完整文字内容（以此为准，忽略原图中的乱码）：
-{FULL_TEXT_CONTENT}
-
-请使用标准中文字体渲染所有文字，字号清晰可读。
-```
-
-### 模板B：边缘伪影清理
-
-适用：画面主体正常，但边缘/角落有异型字符或乱码噪点。
+适用：画面中文字整体模糊/扭曲，不需要逐个指出。
 
 ```
-请根据附图重新生成这张PPT幻灯片。
-
-原图问题：画面边缘/角落存在AI生成伪影（异形文字、乱码符号）。
-
-要求：
-- 保持中心区域的主要内容和布局完全不变
-- 删除所有边缘区域的异常文字和视觉噪点，保持边缘干净
-- 重新绘制画面中的所有中文字符，确保笔画完整清晰
-- 风格：{STYLE_DESCRIPTION}
-- 尺寸：{WIDTH}x{HEIGHT}像素
-
-画面核心内容描述：{SLIDE_CONTENT_DESCRIPTION}
+重绘汉字部分，确保没有扭曲、破损，提高画面分辨率，右下角标识清除
 ```
 
-### 模板C：特定文字纠错
+可选追加：如果边缘有明显乱码，加"边缘乱码删除"。
 
-适用：仅个别文字被替换为形近字，其余正常。
+### 模板B：特定文字纠错
+
+适用：个别文字被替换为形近字，需指出具体修改。
 
 ```
-请根据附图重新生成这张PPT幻灯片。
-
-原图中以下文字存在错误："{PROBLEMATIC_TEXT}"
-正确的文字应该是："{CORRECT_TEXT}"
-
-要求：
-- 修正上述错误文字，其他内容保持不变
-- 重新绘制画面中的所有中文字符，确保无扭曲破损
-- 画面边缘如有无法辨认的异形文字，直接删除
-- {STYLE_DESCRIPTION}，{WIDTH}x{HEIGHT}像素
+"毬拔解"改为"最优解"，其余不变，提高画面分辨率，右下角标识清除
 ```
+
+多处纠错时逐个列出：
+```
+"毬拔解"改为"最优解"，"谓暑设计"改为"顶层设计"，边缘乱码删除，提高画面分辨率，右下角标识清除
+```
+
+### 模板C：画面元素修改
+
+适用：需要调整画面中的非文字元素（图标、插画、布局等）。
+
+```
+把左边皇冠下面的钻石去掉，皇冠放大，指向右边，右边不变，右下角标识清除
+```
+
+要点：只说要改什么，不变的部分说"XX不变"，不要展开描述。
 
 ### 模板D：完整重建（原图损坏严重时）
 
-适用：画面多处文字严重扭曲，修补不如全部重建。
+适用：画面多处严重损坏，diff 修复不如全部重建。**这是唯一需要详细描述内容的场景。**
 
 ```
-请生成一张PPT风格的幻灯片图片。
+请根据附图重新生成一张PPT风格的幻灯片图片。
+重新绘制所有中文字符，确保笔画完整、无乱码。
+提高画面分辨率。
+布局尽量保持与原图一致。
+右下角标识清除。
 
-主题：{TOPIC}
-风格：{STYLE_DESCRIPTION}
-尺寸：{WIDTH}x{HEIGHT}像素，{ASPECT_RATIO}比例
-
-画面中应出现的完整文字内容：
-{FULL_TEXT_CONTENT}
-
-布局：{LAYOUT_DESCRIPTION}
-
-请确保所有中文字符使用标准字体渲染，笔画完整，无扭曲、无破损、无乱码。
-画面边缘保持干净，不要出现多余的装饰性文字。
+画面中应出现的文字内容：
+{需要列出的文字，仅当原图损坏到无法辨认时才需要}
 ```
 
-### 变量填充参考（NotebookLM 粉色主题）
+### 组合用法
 
+提示词可自由组合，保持简洁即可：
 ```
-STYLE_DESCRIPTION = "粉色主题，手绘/插画风格，与NotebookLM生成的视频风格一致"
-WIDTH = 1280
-HEIGHT = 720
-ASPECT_RATIO = "16:9"
-BACKGROUND_DESCRIPTION = "浅粉色网格底纹，带有手绘纹理"
-LAYOUT_DESCRIPTION = "标题在顶部，要点在中下方，右侧/底部有装饰性插画元素（齿轮、拼图、放大镜等），右下角保留 NotebookLM 标识"
+重绘汉字部分，确保没有扭曲、破损，"谓暑设计"改为"顶层设计"，边缘乱码删除，提高画面分辨率和清晰度，右下角标识清除
 ```
+
+> **注意**：原图有 NotebookLM 标识时加"右下角标识清除"。原图没有标识时完全不提右下角。
 
 ---
 
@@ -413,82 +324,39 @@ LAYOUT_DESCRIPTION = "标题在顶部，要点在中下方，右侧/底部有装
 ├── slides_all/          ← 全量幻灯片截图 (slide_NNN_MMmSSs.jpg)
 ├── slides_issues/       ← 有问题的帧（从 slides_all 复制）
 ├── slides_fixed/        ← Gemini 重新生成的修复版
-├── slides-fix/          ← slides-fix 工具工作目录（可选，用于就地运行）
-│   ├── .env             ← Gemini API 密钥
-│   ├── tasks.json       ← 批量任务配置
-│   └── slides-fix.exe   ← 可直接复制自技能 scripts/ 目录
-└── prompt_templates.md  ← 该项目专用的提示词（从模板填充变量后的版本）
+└── slides-fix/          ← slides-fix 工具工作目录（可选，用于就地运行）
+    ├── .env             ← Gemini API 密钥
+    ├── tasks.json       ← 批量任务配置
+    └── slides-fix.exe   ← 可直接复制自技能 scripts/ 目录
 ```
 
 ---
 
-## 八、常见问题
+## 八、常见问题与实战案例
 
-### Q: 场景检测结果数量不对？
-多个阈值并行测试：`0.1`, `0.15`, `0.2`, `0.3`, `0.4`。选择结果数量最接近预期幻灯片数的阈值。
-
-### Q: 提取的帧是动画中间态（内容未渲染完）？
-增加偏移量（从+3s增到+5s或更多），或在该场景结束前2秒提取（取场景末尾的画面）。
-
-### Q: Read 工具读不到提取的图片？
-Windows 上确保使用绝对路径且格式为 `C:\Users\...`（反斜杠）。用 `cygpath -w` 转换。
-
-### Q: Gemini 生成的图片风格不一致？
-- 上传原图作为参考（slides-fix 会自动附加原图）
-- 在提示词中加入更多风格细节（色号、线条风格、装饰元素）
-- 多次生成并选择最佳结果
-
-### Q: Gemini 触发限流？
-按问题优先级排序，先处理最严重的。增大 `-delay` 参数，分多次运行。
-
-### Q: slides-fix 报 "unexpected EOF"？
-临时性网络问题，工具会自动重试 2 次。若仍失败，等待几分钟后重新运行失败的任务。
-
-### Q: 需要重新编译 slides-fix？
-源码在技能的 `tool-source/slides-fix/` 目录：
-```bash
-cd tool-source/slides-fix/
-go build -o ../../scripts/slides-fix.exe .
-```
-
----
-
-## 九、实战案例参考
-
-**项目**：集成供应链计划管理的体系框架（NotebookLM 生成）
-- 视频：670秒，1280x720，H.264 24fps，AAC mono
-- 场景检测阈值：0.15 → 25个场景切换
-- 提取帧：26主帧 + 3补充帧 = 29帧（其中3帧与主帧重复）
-- 问题帧：5张（17%故障率）
-- 问题分类：
-  - 形近字替换 2张（slide_010 "毬拔解"→"最优解"，slide_025 "顶厝设计"→"顶层设计"）
-  - 边缘乱码 1张（slide_007 "汝小角"）
-  - 多处严重扭曲 2张（slide_018、slide_022 各有3-4处乱码）
-- 处理优先级：严重度高的先处理（018 > 022 > 010 > 025 > 007）
-- **修复结果**：使用 slides-fix 批量处理，模型 gemini-3.1-flash-image-preview，5张中3张一次成功，2张因网络 EOF 失败后重试成功
+详见 [references/faq-and-cases.md](references/faq-and-cases.md)。涵盖场景检测调参、动画中间态处理、Windows 路径问题、Gemini 限流/EOF 处理、slides-fix 重编译，以及一个完整的 NotebookLM 视频修复案例。
 
 ---
 
 ## 十、执行检查清单
 
 ```
-□ 1. 设置 $FFMPEG/$FFPROBE/$SLIDES_FIX 路径变量（指向技能 scripts/ 目录）
+□ 1. 确认技能基础目录路径，后续命令使用完整路径调用 scripts/ 下的工具
 □ 2. 配置 .env（填入 Gemini API 密钥）
-□ 3. 获取视频元数据（$FFPROBE）
+□ 3. 获取视频元数据（ffprobe）
 □ 4. 创建三个输出目录：slides_all/ slides_issues/ slides_fixed/
-□ 5. 场景检测获取时间戳（$FFMPEG + scene filter）
+□ 5. 场景检测获取时间戳（ffmpeg + scene filter）
 □ 6. 计算提取时间点（场景切换 +3s 偏移）
 □ 7. 批量提取帧（主帧 + 长间隔补充帧）
 □ 8. 逐帧视觉检查（Read 工具，每批 6-8 张并行）
 □ 9. 标记问题帧并复制到 slides_issues/
 □ 10. 输出问题汇总表（文件名、问题类型、具体描述、正确文字）
-□ 11. 生成项目专用提示词文档（prompt_templates.md）
-□ 12. 编写 tasks.json（定义批量修复任务）
-□ 13. 运行 $SLIDES_FIX -batch tasks.json
-□ 14. 处理失败任务（重试或调整提示词）
-□ 15. 验证修复质量（Read 工具逐张检查 slides_fixed/）
-□ 16. 计算帧范围（场景时间戳 × fps → 起始帧/结束帧）
-□ 17. 展示帧替换表，等待用户确认
-□ 18. 执行 $FFMPEG overlay 回写视频（输出独立文件 *_fixed.mp4）
-□ 19. 抽查输出视频中替换区间的画面
+□ 11. 编写 tasks.json（定义批量修复任务，提示词用 diff 风格）
+□ 12. 运行 slides-fix.exe -batch tasks.json
+□ 13. 处理失败任务（重试或调整提示词）
+□ 14. 验证修复质量（Read 工具逐张检查 slides_fixed/）
+□ 15. 计算帧范围（场景时间戳 × fps → 起始帧/结束帧）
+□ 16. 展示帧替换表，等待用户确认
+□ 17. 执行 ffmpeg overlay 回写视频（输出独立文件 *_fixed.mp4）
+□ 18. 抽查输出视频中替换区间的画面
 ```

@@ -13,8 +13,8 @@ AI 工具（如 NotebookLM）生成的演示视频，经常出现中文字符扭
 
 ## 需要什么
 
-- `ffmpeg` / `ffprobe`（视频处理）
 - Gemini API 密钥（图片重新生成）
+- 其余工具（ffmpeg、ffprobe、fend、slides-fix）已内置于 `scripts/` 目录
 
 ## 目录说明
 
@@ -23,13 +23,36 @@ video-slide-fixer/
 ├── SKILL.md           ← 完整操作指南（Claude Code 读取）
 ├── README.md          ← 你正在看的这个文件
 ├── scripts/
-│   └── slides-fix.exe ← 图片修复工具（预编译）
+│   ├── ffmpeg.exe     ← 视频处理
+│   ├── ffprobe.exe    ← 视频元数据分析
+│   ├── fend.exe       ← 精确数学计算
+│   ├── slides-fix.exe ← 图片修复工具（预编译）
+│   └── model.conf     ← 模型配置文件
+├── references/        ← 详细参考文档（按需加载）
 └── tool-source/
     └── slides-fix/    ← 修复工具的 Go 源码（可自行修改编译）
 ```
+
+## 模型切换
+
+编辑 `scripts/model.conf` 切换 Gemini 模型。规则：`#` 开头为注释，第一个非注释非空行生效。
+
+默认配置（使用 Pro）：
+```
+gemini-3-pro-image-preview
+# gemini-3.1-flash-image-preview
+```
+
+切换到 Flash：
+```
+# gemini-3-pro-image-preview
+gemini-3.1-flash-image-preview
+```
+
+优先级：命令行 `-model` 参数 > `model.conf` > 内置默认值
 
 ## 局限性
 
 - Gemini 生成的修复图不一定完美，可能需要多次调整提示词
 - Gemini API 有调用频率限制，大批量处理需要耐心
-- 修复效果取决于提示词的质量——越详细准确的内容描述，结果越好
+- 修复效果取决于提示词的质量——采用 diff 风格（只说要改什么），越简洁精准结果越好

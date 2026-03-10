@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,20 +14,26 @@ import (
 
 // GeminiClient 封装 Gemini API 客户端，支持复用连接。
 type GeminiClient struct {
-	client *genai.Client
-	model  string
+	client  *genai.Client
+	model   string
+	timeout time.Duration
 }
 
 // NewGeminiClient 创建一个可复用的 Gemini 客户端。
-func NewGeminiClient(ctx context.Context, apiKey, model string) (*GeminiClient, error) {
+// timeout 用于设置 HTTP 请求超时（建议 ≥120s，图片生成较慢）。
+func NewGeminiClient(ctx context.Context, apiKey, model string, timeout time.Duration) (*GeminiClient, error) {
+	httpClient := &http.Client{
+		Timeout: timeout,
+	}
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
+		APIKey:     apiKey,
+		Backend:    genai.BackendGeminiAPI,
+		HTTPClient: httpClient,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建客户端失败: %w", err)
 	}
-	return &GeminiClient{client: client, model: model}, nil
+	return &GeminiClient{client: client, model: model, timeout: timeout}, nil
 }
 
 // EditImage 将图片+提示词发送到 Gemini API，返回生成的图片字节和 MIME 类型。
