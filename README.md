@@ -1,72 +1,74 @@
 # Video Slide Fixer
 
-修复 AI 生成视频中的幻灯片画面质量问题。
+[中文说明](README.zh.md)
 
-## 它能做什么
+Fix slide quality issues in AI-generated videos.
 
-AI 工具（如 NotebookLM）生成的演示视频，经常出现中文字符扭曲、边缘乱码等问题。这个技能可以帮你：
+## What It Does
 
-1. **提取** — 从视频中自动识别并截取每一页幻灯片
-2. **检查** — 逐帧审查，找出文字模糊、乱码、伪影等问题
-3. **修复** — 调用 Gemini API 重新生成有问题的画面
-4. **回写** — 将修复后的图片替换回视频中的对应帧段
+AI tools (e.g., NotebookLM) often produce presentation videos with distorted CJK characters, garbled edges, and visual artifacts. This skill helps you:
 
-## 需要什么
+1. **Extract** — Detect scene changes and capture each slide frame
+2. **Inspect** — Review frames for blurry text, garbled characters, and artifacts
+3. **Fix** — Regenerate problematic frames via Gemini API
+4. **Replace** — Write fixed images back into the video
 
-- Gemini API 密钥（见下方配置说明）
-- 其余工具（ffmpeg、ffprobe、fend、slides-fix）已内置于 `scripts/` 目录
+## Prerequisites
 
-## 配置 API 密钥
+- Gemini API key (see setup below)
+- All other tools (ffmpeg, ffprobe, fend, slides-fix) are bundled in `scripts/`
 
-在你的**项目工作目录**（如视频文件所在目录）下创建 `.env` 文件：
+## API Key Setup
+
+Create a `.env` file in your **project working directory** (e.g., where the video file is):
 
 ```
-GEMINI_API_KEY=你的API密钥
+GEMINI_API_KEY=your_api_key_here
 ```
 
-密钥获取地址：https://aistudio.google.com/apikey
+Get your key at: https://aistudio.google.com/apikey
 
-> 参考模板：`tool-source/slides-fix/.env.example`
+> Template: `tool-source/slides-fix/.env.example`
 >
-> 注意：`.env` 文件包含敏感密钥，请勿提交到版本控制。技能已在 `.gitignore` 中排除了该文件。
+> The `.env` file contains sensitive credentials — do not commit it. It is already excluded in `.gitignore`.
 
-## 目录说明
+## Directory Structure
 
 ```
 video-slide-fixer/
-├── SKILL.md           ← 完整操作指南（Claude Code 读取）
-├── README.md          ← 你正在看的这个文件
+├── SKILL.md           ← Full instruction guide (read by Claude Code)
+├── README.md          ← This file
 ├── scripts/
-│   ├── ffmpeg.exe     ← 视频处理
-│   ├── ffprobe.exe    ← 视频元数据分析
-│   ├── fend.exe       ← 精确数学计算
-│   ├── slides-fix.exe ← 图片修复工具（预编译）
-│   └── model.conf     ← 模型配置文件
-├── references/        ← 详细参考文档（按需加载）
+│   ├── ffmpeg.exe     ← Video processing
+│   ├── ffprobe.exe    ← Video metadata analysis
+│   ├── fend.exe       ← Precise math calculations
+│   ├── slides-fix.exe ← Image repair tool (prebuilt)
+│   └── model.conf     ← Model configuration
+├── references/        ← Detailed reference docs (loaded on demand)
 └── tool-source/
-    └── slides-fix/    ← 修复工具的 Go 源码（可自行修改编译）
+    └── slides-fix/    ← Go source for the repair tool
 ```
 
-## 模型切换
+## Model Switching
 
-编辑 `scripts/model.conf` 切换 Gemini 模型。规则：`#` 开头为注释，第一个非注释非空行生效。
+Edit `scripts/model.conf` to switch Gemini models. Lines starting with `#` are comments; the first non-comment, non-empty line is used.
 
-默认配置（使用 Pro）：
+Default (Pro):
 ```
 gemini-3-pro-image-preview
 # gemini-3.1-flash-image-preview
 ```
 
-切换到 Flash：
+Switch to Flash:
 ```
 # gemini-3-pro-image-preview
 gemini-3.1-flash-image-preview
 ```
 
-优先级：命令行 `-model` 参数 > `model.conf` > 内置默认值
+Priority: `-model` CLI flag > `model.conf` > built-in default
 
-## 局限性
+## Limitations
 
-- Gemini 生成的修复图不一定完美，可能需要多次调整提示词
-- Gemini API 有调用频率限制，大批量处理需要耐心
-- 修复效果取决于提示词的质量——采用 diff 风格（只说要改什么），越简洁精准结果越好
+- Gemini-generated fixes may not be perfect — prompt tuning is often needed
+- Gemini API has rate limits; batch processing requires patience
+- Fix quality depends on prompt quality — use diff-style prompts (describe only what to change) for best results
