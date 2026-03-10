@@ -1,0 +1,6 @@
+# 环境配置（含密钥）
+.env
+
+# Go 编译临时文件
+tool-source/slides-fix/slides-fix
+tool-source/slides-fix/slides-fix.exe
