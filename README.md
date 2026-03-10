@@ -13,8 +13,22 @@ AI 工具（如 NotebookLM）生成的演示视频，经常出现中文字符扭
 
 ## 需要什么
 
-- Gemini API 密钥（图片重新生成）
+- Gemini API 密钥（见下方配置说明）
 - 其余工具（ffmpeg、ffprobe、fend、slides-fix）已内置于 `scripts/` 目录
+
+## 配置 API 密钥
+
+在你的**项目工作目录**（如视频文件所在目录）下创建 `.env` 文件：
+
+```
+GEMINI_API_KEY=你的API密钥
+```
+
+密钥获取地址：https://aistudio.google.com/apikey
+
+> 参考模板：`tool-source/slides-fix/.env.example`
+>
+> 注意：`.env` 文件包含敏感密钥，请勿提交到版本控制。技能已在 `.gitignore` 中排除了该文件。
 
 ## 目录说明
 
