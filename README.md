@@ -67,6 +67,15 @@ gemini-3.1-flash-image-preview
 
 Priority: `-model` CLI flag > `model.conf` > built-in default
 
+## Optional: Gemini Web for Table-Heavy Slides
+
+For slides with **tables and dense CJK text**, the Gemini web UI (`gemini.google.com`) produces significantly sharper text than the API. If you have a [Playwright MCP Bridge](https://chromewebstore.google.com/detail/playwright-mcp-bridge/mmlmfjhmonkocbjadbfplnigmagldckm) server configured, Claude Code will automatically offer this option when it detects such frames.
+
+Requirements:
+- Playwright MCP tools available (`browser_navigate`, etc.)
+- Logged into Google account in the browser
+- Browser "ask before download" setting disabled
+
 ## Limitations
 
 - Gemini-generated fixes may not be perfect — prompt tuning is often needed

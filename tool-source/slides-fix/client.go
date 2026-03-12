@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -84,19 +85,9 @@ func (gc *GeminiClient) EditImage(ctx context.Context, imagePath, prompt string)
 		}
 	}
 
-	// 收集文本部分用于调试（返回给调用方，不直接打印，以免并发输出交错）
-	var textParts []string
-	for _, part := range result.Candidates[0].Content.Parts {
-		if part.Text != "" {
-			textParts = append(textParts, part.Text)
-		}
-	}
-
-	errMsg := "响应中无图片（模型可能仅返回了文本）"
-	if len(textParts) > 0 {
-		errMsg += "；Gemini 文本回复: " + strings.Join(textParts, " | ")
-	}
-	return nil, "", fmt.Errorf("%s", errMsg)
+	// 无图片时，序列化完整响应用于调试（不遗漏 Thought、FinishReason 等字段）
+	respJSON, _ := json.MarshalIndent(result, "", "  ")
+	return nil, "", fmt.Errorf("响应中无图片；完整响应:\n%s", string(respJSON))
 }
 
 // EditImageWithRetry 封装 EditImage，增加重试逻辑。

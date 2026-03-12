@@ -67,6 +67,15 @@ gemini-3.1-flash-image-preview
 
 优先级：命令行 `-model` 参数 > `model.conf` > 内置默认值
 
+## 可选：Gemini 网页版修复表格密集文字
+
+对于**含表格和大量中文字**的幻灯片，Gemini 网页版（`gemini.google.com`）的文字重绘质量**显著优于 API**。如果你配置了 [Playwright MCP Bridge 浏览器插件](https://chromewebstore.google.com/detail/playwright-mcp-bridge/mmlmfjhmonkocbjadbfplnigmagldckm) 服务器，Claude Code 在检测到此类问题帧时会自动询问是否使用网页版修复。
+
+使用条件：
+- 环境中有可用的 Playwright MCP 工具（`browser_navigate` 等）
+- 浏览器已登录 Google 账号
+- 浏览器已关闭"下载前询问保存位置"设置
+
 ## 局限性
 
 - Gemini 生成的修复图不一定完美，可能需要多次调整提示词
