@@ -4,3 +4,7 @@
 # Go 编译临时文件
 tool-source/slides-fix/slides-fix
 tool-source/slides-fix/slides-fix.exe
+
+.idea
+.vscode
+.claude

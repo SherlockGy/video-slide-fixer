@@ -62,7 +62,7 @@ slides-fix -batch tasks.json [-delay 10] [-concurrency 3]
 ```json
 [
   {
-    "image": "slides_issues/slide_010_03m48s.jpg",
+    "image": "slides_issues/slide_010_03m48s.png",
     "output": "slides_fixed/slide_010_fixed.png",
     "prompt": "请根据附图重新生成..."
   }
