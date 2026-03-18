@@ -111,10 +111,10 @@ ffmpeg -i "<视频路径>" \
 
 **调参策略**：从 0.3 开始，若结果数量明显少于预期幻灯片数则降低；若结果过多（含大量动画中间帧）则升高。可多个阈值并行测试对比。
 
-**提取时间戳的 grep 兼容性**：Windows Git Bash 下 `grep -P`（Perl正则）不可用，改用 sed：
+**提取时间戳的 grep 兼容性**：Windows Git Bash 下 `grep -P`（Perl正则）不可用，改用 sed。用 `tee` 同时输出到终端和 `scene_timestamps.txt`，后者是回写视频时计算帧范围的权威数据源：
 ```bash
 ffmpeg -i "<视频>" -vf "select='gt(scene,0.15)',showinfo" -vsync vfr -f null - 2>&1 \
-  | grep "pts_time" | sed 's/.*pts_time:\([0-9.]*\).*/\1/'
+  | grep "pts_time" | sed 's/.*pts_time:\([0-9.]*\).*/\1/' | tee scene_timestamps.txt
 ```
 
 ### 2.2 按时间戳批量提取帧
@@ -138,6 +138,8 @@ done
 ```
 
 **命名规范**：`slide_NNN_MMmSSs.png`（如 `slide_001_00m03s.png`）
+
+> **注意**：文件名中的时间（如 `01m06s`）是场景切换时间 +3秒偏移后取整的近似值，仅供人类快速定位。帧范围计算必须使用 `scene_timestamps.txt` 中的精确时间戳，不能从文件名反推。
 
 **关键参数**：
 - `-ss` 放在 `-i` 之前：快速输入定位（seek to keyframe）
@@ -339,7 +341,7 @@ slides-fix.exe \
 
 详细操作指南见 [references/video-rewrite.md](references/video-rewrite.md)。
 
-核心流程：用 fend 计算帧范围 → 展示替换表给用户确认 → ffmpeg overlay 命令替换帧段 → 输出独立文件（不覆盖原视频）。
+核心流程：从 `scene_timestamps.txt` 读取精确时间戳 → 用 fend 计算帧范围 → 展示替换表给用户确认 → ffmpeg overlay 命令替换帧段 → 输出独立文件（不覆盖原视频）。
 
 ---
 
@@ -467,6 +469,7 @@ Gemini 已经能看到附图，所以提示词**只描述要改什么**，不要
 ├── <源视频>.mp4
 ├── <源视频>.mp3           ← 分离的音频（供用户转写文案）
 ├── <文案>.txt 或 .md      ← 用户提供的视频文案（音频转写）
+├── scene_timestamps.txt   ← 场景检测的精确时间戳（回写视频时的权威数据源）
 ├── slides_all/            ← 全量幻灯片截图 (slide_NNN_MMmSSs.png)
 ├── slides_issues/         ← 有问题的帧（从 slides_all 复制）
 ├── slides_fixed/          ← Gemini 重新生成的修复版
@@ -495,7 +498,7 @@ Gemini 已经能看到附图，所以提示词**只描述要改什么**，不要
 □ 3d. ⏸ 暂停，等待用户提供文案文件（.txt / .md）
 □ 3e. 读取文案，通读全文，理解叙事脉络
 □ 4. 创建三个输出目录：slides_all/ slides_issues/ slides_fixed/
-□ 5. 场景检测获取时间戳（ffmpeg + scene filter）
+□ 5. 场景检测获取时间戳（ffmpeg + scene filter），保存到 scene_timestamps.txt
 □ 6. 计算提取时间点（场景切换 +3s 偏移）
 □ 7. 批量提取帧（主帧 + 长间隔补充帧）
 □ 8. 建立幻灯片-文案段落映射表
@@ -508,7 +511,7 @@ Gemini 已经能看到附图，所以提示词**只描述要改什么**，不要
 □ 13. 运行 slides-fix.exe -batch tasks.json（跳过已由网页版修复的帧）
 □ 14. 处理失败任务（重试或调整提示词）
 □ 15. 验证修复质量（Read 工具逐张检查 slides_fixed/）
-□ 16. 计算帧范围（场景时间戳 × fps → 起始帧/结束帧）
+□ 16. 从 scene_timestamps.txt 读取精确时间戳，用 fend 计算帧范围（时间戳 × fps → 起始帧/结束帧）
 □ 17. 展示帧替换表，等待用户确认
 □ 18. 执行 ffmpeg overlay 回写视频（输出独立文件 *_fixed.mp4）
 □ 19. 抽查输出视频中替换区间的画面
