@@ -88,13 +88,32 @@ async (page) => {
 
 ### 步骤 5：移动下载文件
 
-等待 5 秒确保下载完成，然后查找并移动：
+下载文件默认保存到**用户的下载目录**（`~/Downloads/`），除非用户明确指定了其他目录。
+
+**必须使用 diff 方式定位新文件**，避免误取旧文件：
+
 ```bash
+# ===== 在步骤 2（复制剪贴板）之前，先记录已有文件 =====
+ls ~/Downloads/Gemini_Generated_Image_*.png 2>/dev/null | sort > /tmp/gemini_before.txt
+
+# ===== 在点击下载按钮之后，等待并找到新增文件 =====
 sleep 5
-# 按修改时间排序，取最新的 Gemini 生成文件（先查 Downloads，再查桌面）
-LATEST=$(ls -t ~/Downloads/Gemini_Generated_Image_*.png ~/Desktop/Gemini_Generated_Image_*.png 2>/dev/null | head -1)
-mv "$LATEST" "<slides_fixed/slide_NNN_fixed.png>"
+ls ~/Downloads/Gemini_Generated_Image_*.png 2>/dev/null | sort > /tmp/gemini_after.txt
+NEW=$(comm -13 /tmp/gemini_before.txt /tmp/gemini_after.txt)
+echo "New file: $NEW"
+
+# 确认文件存在后再移动
+if [ -n "$NEW" ]; then
+  cp "$NEW" "<slides_fixed/slide_NNN_fixed.png>"
+else
+  echo "ERROR: No new file found!"
+fi
 ```
+
+> **重要**：
+> - 不要用 `ls -t | head -1`，该方式会在存在旧文件时取错
+> - 移动前必须用 Read 工具验证图片内容是否正确，确认后再移动
+> - 记录已有文件的步骤应在**每轮处理开始时**执行（步骤 2 之前）
 
 ### 处理下一张（循环步骤 2-5）
 

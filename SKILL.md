@@ -24,6 +24,7 @@ scripts/ffprobe.exe     ← 视频元数据分析
 scripts/fend.exe        ← 精确数学计算（帧号计算等）
 scripts/slides-fix.exe  ← 幻灯片图片修复（Go 语言开发）
 scripts/model.conf      ← Gemini 模型配置文件
+scripts/slide-preview.js ← 修复预览网页（Node.js，回写前对比确认）
 ```
 
 Claude Code 加载技能时会在系统提示中给出基础目录路径（"Base directory for this skill: ..."）。使用时直接拼接完整路径调用，例如：
@@ -320,6 +321,16 @@ slides-fix.exe \
 
 若结果不满意，调整提示词后重新运行单张修复。
 
+#### 网页预览对比（推荐）
+
+修复完成后、回写视频前，启动预览服务让用户在浏览器中直观对比所有幻灯片：
+
+```bash
+node "<基础目录>/scripts/slide-preview.js" "<项目目录>"
+```
+
+页面展示所有幻灯片列表，已替换的帧左右并排显示（左原图、右修复图），未变更的帧单张显示。顶部统计栏汇总总数、已替换数和未变更数。用户确认满意后再进入第五节回写视频。
+
 ### 4.7 Gemini 网页版修复（表格密集文字场景，Playwright MCP）
 
 **适用场景**：图片中包含**表格且有较多汉字**，文字存在扭曲、变形。Gemini 网页版对此类场景的文字重绘质量**显著优于 API**。
@@ -511,6 +522,7 @@ Gemini 已经能看到附图，所以提示词**只描述要改什么**，不要
 □ 13. 运行 slides-fix.exe -batch tasks.json（跳过已由网页版修复的帧）
 □ 14. 处理失败任务（重试或调整提示词）
 □ 15. 验证修复质量（Read 工具逐张检查 slides_fixed/）
+□ 15b. 启动网页预览服务（slide-preview.js），用户在浏览器中对比确认全部修复结果
 □ 16. 从 scene_timestamps.txt 读取精确时间戳，用 fend 计算帧范围（时间戳 × fps → 起始帧/结束帧）
 □ 17. 展示帧替换表，等待用户确认
 □ 18. 执行 ffmpeg overlay 回写视频（输出独立文件 *_fixed.mp4）
