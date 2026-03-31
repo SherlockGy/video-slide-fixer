@@ -22,7 +22,7 @@ browser_navigate → https://gemini.google.com/app
 > ⚠️ **为什么必须走剪贴板**：Playwright 的 `browser_file_upload`、`setInputFiles`、`waitForEvent('filechooser')` 在 Gemini 网页上全部被 Chrome DevTools Protocol 拒绝（报错 `"Not allowed"`）。`browser_run_code` 也无法 `require('fs')` 读取本地文件。唯一可靠的路径是 **PowerShell 写剪贴板 → 浏览器 Ctrl+V 粘贴**。
 
 ```bash
-powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile('<图片绝对路径>'))"
+powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile('<图片绝对路径>'))"
 ```
 
 ### 步骤 3：上传 + 输入提示词 + 发送（合并为一次调用）
@@ -41,7 +41,14 @@ async (page) => {
   await page.keyboard.press('Control+v');
 
   // 等待缩略图出现（必须确认，否则会发送纯文字请求）
-  await page.getByRole('button', { name: '图片预览' }).waitFor({ state: 'visible', timeout: 5000 });
+  await page.waitForTimeout(3000);
+
+  // ⚠️ 重复粘贴保护：若出现 2 张图片预览，删掉第一张
+  const previewCount = await page.getByRole('button', { name: '图片预览' }).count();
+  if (previewCount > 1) {
+    await page.getByRole('button', { name: /移除文件/ }).first().click();
+    await page.waitForTimeout(300);
+  }
 
   // 输入提示词（用 fill，不要用 type —— fill 更快且不会触发逐字事件）
   await inputBox.fill('<提示词>');
@@ -55,7 +62,8 @@ async (page) => {
 
 **关键细节**：
 - **必须 click "发送" 按钮**：`fill()` + `Enter` 和 `browser_type` 的 `submit=true` 在 Gemini 上都不能可靠触发提交
-- **等待缩略图**：`getByRole('button', { name: '图片预览' })` 是粘贴成功后出现的缩略图元素，比 `waitForTimeout(3000)` 更精确
+- **重复图片问题**：Gemini 新对话页面有时已附有上一轮的图片残留，粘贴后会出现 2 个缩略图。务必检测并删掉多余的一张，否则发送失败
+- **不要用 `waitFor` 等缩略图**：改用固定等待 3 秒后检查数量，`waitFor` 在有残留图片时会因"strict mode violation"（找到 2 个元素）抛错
 
 表格文字重绘的推荐提示词：
 ```
@@ -71,19 +79,18 @@ async (page) => {
 ```javascript
 // browser_run_code
 async (page) => {
-  // 等待下载按钮出现（必须用 getByRole，getByText 匹配不到按钮元素）
-  await page.getByRole('button', { name: '下载完整尺寸的图片' })
+  // 用 data-test-id 定位下载按钮（比 getByRole 更稳定，不受 UI 语言影响）
+  await page.locator('[data-test-id="download-generated-image-button"]')
     .waitFor({ state: 'visible', timeout: 90000 });
 
-  // 直接点击下载
-  await page.getByRole('button', { name: '下载完整尺寸的图片' }).click();
+  await page.locator('[data-test-id="download-generated-image-button"]').click();
 
   return 'downloaded';
 }
 ```
 
 **关键细节**：
-- **必须用 `getByRole('button', ...)`**：下载按钮是 `<button>` 元素，`getByText()` 和 `browser_wait_for` 的 `text=` 参数都无法匹配到它
+- **优先用 `data-test-id`**：`[data-test-id="download-generated-image-button"]` 比 `getByRole('button', { name: '下载完整尺寸的图片' })` 更稳定，不受界面语言或文案变化影响
 - 若 90 秒超时，说明生成失败——用 `browser_snapshot` 检查页面，可能返回了纯文字
 
 ### 步骤 5：移动下载文件

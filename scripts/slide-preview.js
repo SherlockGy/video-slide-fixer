@@ -89,69 +89,71 @@ function buildHTML() {
   .stats-bar {
     position: sticky; top: 0; z-index: 100;
     display: flex; align-items: center; justify-content: center; gap: 32px;
-    padding: 14px 24px;
+    padding: 8px 24px;
     background: #1a1d27; border-bottom: 1px solid #2a2d3a;
-    font-size: 15px;
+    font-size: 13px;
   }
   .stats-bar .stat { display: flex; align-items: center; gap: 6px; }
-  .stats-bar .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .stats-bar .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .dot-total { background: #888; }
   .dot-replaced { background: #f59e0b; }
   .dot-pass { background: #22c55e; }
 
-  /* 卡片容器 */
-  .cards { max-width: 1400px; margin: 24px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 20px; }
+  /* 卡片列表：纵向，限制最大宽度 */
+  .cards {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 8px;
+  }
 
   /* 卡片公共 */
   .card {
-    background: #1a1d27; border-radius: 10px; overflow: hidden;
-    border: 2px solid #2a2d3a; transition: border-color .2s;
+    background: #1a1d27; border-radius: 8px; overflow: hidden;
+    border: 1px solid #2a2d3a;
   }
-  .card:hover { border-color: #444; }
+  .card-replaced { border-color: #f59e0b; }
+
   .card-header {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 16px; font-size: 14px; color: #aaa;
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px; font-size: 12px; color: #aaa;
+    border-bottom: 1px solid #2a2d3a;
   }
   .badge {
-    display: inline-block; padding: 2px 10px; border-radius: 4px;
-    font-size: 12px; font-weight: 600; letter-spacing: .3px;
+    display: inline-block; padding: 1px 8px; border-radius: 3px;
+    font-size: 11px; font-weight: 600; letter-spacing: .3px;
   }
-  .badge-pass { background: #16382a; color: #22c55e; }
   .badge-replaced { background: #3b2a10; color: #f59e0b; }
+  .badge-pass { background: #16382a; color: #22c55e; }
 
-  /* 已替换卡片高亮边框 */
-  .card-replaced { border-color: #f59e0b; }
-  .card-replaced:hover { border-color: #fbbf24; }
-
-  /* 图片区域 */
-  .card-body { padding: 0 16px 16px; }
+  /* 对比区：两张图并排，充满全宽 */
   .compare {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    padding: 6px;
   }
-  .single { display: flex; justify-content: center; }
+
+  /* 单图区：全宽 */
+  .single { padding: 6px; }
 
   .img-wrapper { position: relative; }
   .img-wrapper img {
-    width: 100%; height: auto; border-radius: 6px;
+    width: 100%; height: auto; border-radius: 4px;
     cursor: pointer; display: block;
   }
   .img-label {
-    position: absolute; top: 8px; left: 8px;
-    background: rgba(0,0,0,.65); color: #ccc;
-    font-size: 11px; padding: 2px 8px; border-radius: 3px;
+    position: absolute; top: 6px; left: 6px;
+    background: rgba(0,0,0,.7); color: #ccc;
+    font-size: 11px; padding: 1px 6px; border-radius: 3px;
+    pointer-events: none;
   }
-
-  .single img { max-width: 680px; }
 
   /* Lightbox */
   .lightbox {
     display: none; position: fixed; inset: 0; z-index: 1000;
-    background: rgba(0,0,0,.88); justify-content: center; align-items: center;
+    background: rgba(0,0,0,.92); justify-content: center; align-items: center;
     cursor: zoom-out;
   }
   .lightbox.active { display: flex; }
   .lightbox img {
-    max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 6px;
+    max-width: 96vw; max-height: 96vh; object-fit: contain; border-radius: 4px;
   }
 </style>
 </head>
@@ -184,32 +186,33 @@ function buildHTML() {
       const badgeClass = s.replaced ? "badge-replaced" : "badge-pass";
       const badgeText = s.replaced ? "已替换" : "PASS";
 
-      let bodyHTML = "";
+      let bodyHTML;
       if (s.replaced) {
-        bodyHTML = '<div class="compare">' +
-          '<div class="img-wrapper">' +
-            '<span class="img-label">原图</span>' +
-            '<img src="/images/all/' + s.originalFile + '" onclick="openLightbox(this.src)" alt="原图">' +
-          '</div>' +
-          '<div class="img-wrapper">' +
-            '<span class="img-label">修复后</span>' +
-            '<img src="/images/fixed/' + s.fixedFile + '" onclick="openLightbox(this.src)" alt="修复后">' +
-          '</div>' +
-        '</div>';
+        bodyHTML =
+          '<div class="compare">' +
+            '<div class="img-wrapper">' +
+              '<span class="img-label">原图</span>' +
+              '<img src="/images/all/' + s.originalFile + '" onclick="openLightbox(this.src)" alt="原图">' +
+            '</div>' +
+            '<div class="img-wrapper">' +
+              '<span class="img-label">修复后</span>' +
+              '<img src="/images/fixed/' + s.fixedFile + '" onclick="openLightbox(this.src)" alt="修复后">' +
+            '</div>' +
+          '</div>';
       } else {
-        bodyHTML = '<div class="single">' +
-          '<div class="img-wrapper">' +
-            '<img src="/images/all/' + s.originalFile + '" onclick="openLightbox(this.src)" alt="幻灯片">' +
-          '</div>' +
-        '</div>';
+        bodyHTML =
+          '<div class="single">' +
+            '<div class="img-wrapper">' +
+              '<img src="/images/all/' + s.originalFile + '" onclick="openLightbox(this.src)" alt="幻灯片">' +
+            '</div>' +
+          '</div>';
       }
 
       card.innerHTML =
         '<div class="card-header">' +
           '<span class="badge ' + badgeClass + '">' + badgeText + '</span>' +
           '<span>#' + s.num + ' — ' + s.originalFile + '</span>' +
-        '</div>' +
-        '<div class="card-body">' + bodyHTML + '</div>';
+        '</div>' + bodyHTML;
 
       container.appendChild(card);
     }
